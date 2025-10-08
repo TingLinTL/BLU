@@ -1,0 +1,60 @@
+model {
+  for (i in 1:N) {
+    is_cens[i] ~ dinterval(T[i], C[i])
+    
+    #event time
+    muT[i] <- eta0 + eta_x*X[i] + eta_a*A[i] + eta_u*U[i] 
+    log_bT[i] <- -kT * muT[i]
+    bT[i] <- exp(log_bT[i])
+    T[i] ~ dweib(kT, bT[i])
+    
+    #censoring time
+    muC[i] <- cen0 + cen_x*X[i] + cen_a*A[i] + cen_u*U[i]  
+    #cen_u=0, then the censoring process is (conditionally) independent of U and becomes noninformative given A,X.
+    log_bC[i] <- -kC * muC[i]
+    bC[i] <- exp(log_bC[i])
+    C[i] ~ dweib(kC, bC[i])
+    
+    # ---- Latent U model ---- (independent)
+    U[i] ~ dbern(pU)
+    
+    # ---- Treatment assignment model A|X,U ----
+    A[i] ~ dbern(pA[i])
+    logit(pA[i]) <- alpha0 + alpha1*X[i] + alpha2*U[i]
+    
+    # ---- Treatment assignment model A|X ----
+    #A[i] ~ dbern(pA[i])
+    #logit(pA[i]) <- alpha0 + alpha1*X[i]
+    
+    
+  }
+  # ------- prior -------
+  #Outcome parameters
+  #event
+  eta0 ~ dnorm(0, 0.01)
+  eta_x ~ dnorm(0, 0.01)
+  eta_a ~ dnorm(0, 0.01)
+  eta_u ~ dnorm(0, 0.01)
+  #censoring
+  cen0 ~ dnorm(0, 0.01)
+  cen_x ~ dnorm(0, 0.01)
+  cen_a ~ dnorm(0, 0.01)
+  cen_u ~ dnorm(0, 0.01)
+
+  
+  #Latent U 
+  #pU ~ dnorm(0, 0.5)   ,could be outside of [0,1] for pU?
+   pU ~ dbeta(2, 2)      # more informative prior, centered around 0.5 or pU ~ dbeta(1,1)?
+  
+  #Treatment parameters
+  alpha0 ~ dnorm(0, 0.001)
+  alpha1 ~ dnorm(0, 0.001)
+  alpha2 ~ dnorm(0, 0.001)    # sensitivity effect of U on treatment
+  
+  #shapes
+  logkT ~ dnorm(0, 0.01)
+  logkC ~ dnorm(0, 0.01)
+  kT <- exp(logkT)
+  kC <- exp(logkC)
+  #common shape? kT=kC?
+}
