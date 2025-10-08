@@ -50,7 +50,7 @@ gen_data_sim <- function(n, tau, alpha_0, alpha_x,
 #Simulation runs s=1,2....,S
 t0 <- 2   #predict at specific t0
 true_spce <- -0.2874432 #true spce 
-S <- 10
+S <- 200
 
 pos_mean <- sd <- bias <- lo <- hi<- numeric(S)
 
@@ -136,6 +136,8 @@ results <- data.frame(
   upper_ci = hi
 )
 
-results
+
+#within_interval<-true_spce >= lo & true_spce <= hi. 
+#sum(within_interval) #count how many TRUE/FALSE
 
 write.csv(results, "spce_results.csv", row.names = FALSE)
