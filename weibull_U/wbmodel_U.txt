@@ -1,0 +1,50 @@
+model {
+  
+  # ----- Likelihood, non-informative -----
+  for (i in 1:N) {
+    # Right-censoring via interval indicator
+    is_cens[i] ~ dinterval(T[i], C[i])
+    
+    # Outcome model: Weibull distribution, dweib(shape = k, rate = b[i])
+    T[i] ~ dweib(k, b[i])
+    
+    # AFT linear predictor with latent U 
+    # log(lambda_i) = beta0 + beta1 * X[i] + beta2 * A[i] + beta3 * U[i]
+    mu[i] <- eta0 + eta_x*X[i] + eta_a*A[i] + eta_u*U[i]
+    
+    # rate parameter b[i] = exp(-k * mu[i])
+    # log b[i] = -k * mu[i]
+    log_b[i] <- -k * mu[i]
+    b[i] <- exp(log_b[i])
+    
+    # ---- Latent U model ----
+    #U[i] ~ dbern(pU)
+    U[i] ~ dbern(pU[i])
+    logit(pU[i]) <- gamma0 + gamma1*X[i]  
+    
+    # ---- Treatment assignment model A|X,U ----
+    A[i] ~ dbern(pA[i])
+    logit(pA[i]) <- alpha0 + alpha1*X[i] + alpha2*U[i]
+  }
+  
+  # ----- Priors -----
+  #outcome parameters
+  eta0 ~ dnorm(0, 0.001)
+  eta_x ~ dnorm(0, 0.001)
+  eta_a ~ dnorm(0, 0.001)
+  eta_u ~ dnorm(0, 0.001)      # sensitivity effect of U on outcome
+  
+  #U parameters
+  gamma0 ~ dnorm(0, 0.001)
+  gamma1 ~ dnorm(0, 0.5)
+  #pU ~ dnorm(0, 0.1^(-2)) 
+  
+  #Treatment parameters
+  alpha0 ~ dnorm(0, 0.001)
+  alpha1 ~ dnorm(0, 0.001)
+  alpha2 ~ dnorm(0, 0.001)    # sensitivity effect of U on treatment
+  
+  logk ~ dnorm(0, 0.001)
+  k <- exp(logk)
+
+}
