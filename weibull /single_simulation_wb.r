@@ -1,0 +1,102 @@
+library(survival)
+library(LaplacesDemon)
+n <- 1000 #sample size 
+tau <- 5.5 #maximum follow-up time
+true_spce_aft <-  -0.2874432
+
+#covariate
+X <- rbinom(n, size = 1, prob = 0.4)
+
+#treatment assignment
+alpha_0  <- 0.1; alpha_x <- 0.3
+linpred_A <- alpha_0 + alpha_x * X
+pi_A      <- plogis(linpred_A)
+A         <- rbinom(n, size = 1, prob = pi_A)
+
+#time
+eta_intercept_a0 <- 0.7; eta_intercept_a1 <- 0.2; eta_x <- -0.1
+k <- 2
+mu1 <- eta_intercept_a1 + eta_x * X
+mu0 <- eta_intercept_a0 + eta_x * X
+b1 <- exp(-k * mu1) 
+b0 <- exp(-k * mu0)   
+U0 <- runif(n)
+U1 <- runif(n)
+D_a0 <- (-log(U0) / b0)^(1/k)     
+D_a1 <- (-log(U1) / b1)^(1/k) 
+
+
+# ---- Non-informative censoring ----
+C_a0 <- runif(n, 0.1, tau)
+C_a1 <- runif(n, 0.1, tau)
+
+# ---- Observed time & event indicator ----
+M <- ifelse(A == 1, pmin(tau, C_a1, D_a1),
+            pmin(tau, C_a0, D_a0))
+d<- ifelse(A == 1,
+           as.numeric(D_a1 <= pmin(tau, C_a1)),
+           as.numeric(D_a0 <= pmin(tau, C_a0)))
+
+## ---- Observed dataset ----
+data_sim <- data.frame(
+  M = M,
+  d = d,
+  A = A,
+  X = X
+)
+
+# --------------- JAGS model --------------- 
+library(rjags)
+library(coda)
+
+N <- nrow(data_sim)
+T_vec <- data_sim$M
+T_vec[data_sim$d == 0] <- NA_real_
+C_vec <- ifelse(data_sim$d == 1L, data_sim$M + 1, data_sim$M)
+
+jags_data <- list(
+    N = N,
+    T = T_vec,
+    C = C_vec,
+    is_cens = 1L - data_sim$d,     # 1=censored, 0=event
+    A = data_sim$A,
+    X = data_sim$X,
+    t0 = 2.0      
+  )
+
+#c("beta0","beta1","beta2","k","S0","S1","SPCE")
+
+#-------------------------------------------
+#m <- jags.model("wbmodel.txt", data=jags_data, n.chains=3, n.adapt=2000)
+#update(m, 4000)
+#samp <- coda.samples(m, c("beta0","beta1","beta2","k","SPCE"), n.iter=12000, thin=2)
+#summary(samp[, c("beta0","beta1","beta2","k")])
+
+#-------------------------------------------
+m <- jags.model("wbmodel.txt", data=jags_data, n.chains=1)
+params <- c("SPCE")
+samp <- coda.samples(m, variable.names=params, n.iter=20000)
+samp = data.frame(samp[[1]][10001:20000, ])
+summary(samp)
+#-------------------------------------------
+
+mat <- as.matrix(samp)  
+
+spce_cols <- grep("^SPCE(\\[|\\.)", colnames(mat), value = TRUE)
+idx       <- as.integer(sub(".*?(\\d+).*", "\\1", spce_cols))  
+ord       <- order(idx)
+SPCE_mat  <- mat[ , spce_cols[ord], drop = FALSE]  
+dim(SPCE_mat )
+M <- nrow(SPCE_mat)
+
+#Bayesian bootstrap over X
+w <- rdirichlet(M, rep(1, N))    
+SPCE_marg <- rowSums(w * SPCE_mat)             #  M * 1 column
+
+# --- Posterior summaries of marginal SPCE ---
+pos_mean <- mean(SPCE_marg);pos_mean #posterior mean of maginal SPCE
+sd(SPCE_marg) #sd over 10000 draws
+bias <- pos_mean - true_spce_aft ; bias
+quantile(SPCE_marg, c(.025, .975))
+
+
