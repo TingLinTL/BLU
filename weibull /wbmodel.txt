@@ -1,53 +1,31 @@
 model {
-
-  # ----- Likelihood -----
+  
+  # ----- Likelihood, non-informative -----
   for (i in 1:N) {
     # Right-censoring via interval indicator
     is_cens[i] ~ dinterval(T[i], C[i])
-
-    # Weibull distribution, dweib(shape = k, rate = b[i])
+    
+    # Outcome model: Weibull distribution, dweib(shape = k, rate = b[i])
     T[i] ~ dweib(k, b[i])
-
-    # AFT linear predictor
-    # log(lambda_i) = beta0 + beta1 * X[i] + beta2 * A[i]
-    mu[i] <- beta0 + beta1 * X[i] + beta2 * A[i]
-
-    # b[i] = lambda_i^(-k)  -> log b[i] = -k * mu[i]
+    
+    # AFT linear predictor with latent U 
+    # log(lambda_i) = eta0 + eta_x * X[i] + eta_a * A[i] 
+    mu[i] <- eta0 + eta_x*X[i] + eta_a*A[i] 
+    
+    # rate parameter b[i] = exp(-k * mu[i])
+    # log b[i] = -k * mu[i]
     log_b[i] <- -k * mu[i]
     b[i] <- exp(log_b[i])
-    
-      # ---- Treatment assignment model A|X ----
-    A[i] ~ dbern(pA[i])
-    logit(pA[i]) <- alpha0 + alpha1*X[i] 
-  }
 
+  }
+  
   # ----- Priors -----
-  beta0 ~ dnorm(0, 0.001)
-  beta1 ~ dnorm(0, 0.001)
-  beta2 ~ dnorm(0, 0.001)
-  
-  alpha0 ~ dnorm(0, 0.001)
-  alpha1 ~ dnorm(0, 0.001)
-  
-  logk ~ dnorm(0, 0.01)
+  #outcome parameters
+  eta0 ~ dnorm(0, 0.001)
+  eta_x ~ dnorm(0, 0.001)
+  eta_a ~ dnorm(0, 0.001)
+
+  logk ~ dnorm(0, 0.001)
   k <- exp(logk)
 
-  # ----- Survival at t0 under treatment for each subject -----
-  for (i in 1:N) {
-    mu0[i] <- beta0 +  beta1 * X[i]           #A=0
-    mu1[i] <- beta0 +  beta1 * X[i] + beta2   #A=1
-
-    # Convert to rates
-    log_b0[i] <- -k * mu0[i]
-    log_b1[i] <- -k * mu1[i]
-    b0[i] <- exp(log_b0[i])
-    b1[i] <- exp(log_b1[i])
-
-    # Weibull survival with shape k and rate b S(t) = exp( - b * t^k )
-    S0[i] <- exp(- b0[i] * pow(t0, k))
-    S1[i] <- exp(- b1[i] * pow(t0, k))
-
-    # individual difference 
-    SPCE[i] <- S1[i] - S0[i]
-  }
 }
