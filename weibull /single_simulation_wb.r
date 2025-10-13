@@ -4,7 +4,7 @@ n <- 1000 #sample size
 tau <- 5.5 #maximum follow-up time
 true_spce_aft <-  -0.2874432
 t0 <- 2 #predict time
-rx <- 10000 #number of resample of covariate X
+rx <- 1000000 #number of resample of covariate X
 #covariate
 X <- rbinom(n, size = 1, prob = 0.4)
 
@@ -79,10 +79,50 @@ samp <- coda.samples(m, variable.names=params, n.iter=20000)
 samp = data.frame(samp[[1]][10001:20000, ])
 summary(samp)
 
+#---------------------------resample X new without matrix ---------------------------------------
+#Extract posterior matrix
+post <- as.matrix(samp)  
 
+# pull parameter vectors
+eta0  <- post[,"eta0"]
+eta_x <- post[,"eta_x"]
+eta_a <- post[,"eta_a"]
+k_draws  <- post[,"k"]         
+M<- nrow(post) 
 
+#Bayesian bootstrap over X
+w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))   
+#resample new X from reweighted X
+X_star <- sample(X, size = rx, replace = TRUE, prob = w)
 
-#---------------------------resample X new---------------------------------------
+# --- precompute t0^k for all posterior draws ---
+t0k <- t0 ^ k_draws      
+S0_marg <- numeric(M)          # running sums over X*
+S1_marg<- numeric(M)
+
+           
+for (m in 1:M) {
+  # linear predictors over the rx X* values
+  mu0 <- eta0[m] + eta_x[m] * X_star
+  mu1 <- eta0[m] + eta_a[m] + eta_x[m] * X_star
+  
+  # Weibull scale terms
+  b0 <- exp(-k_draws[m] * mu0)
+  b1 <- exp(-k_draws[m] * mu1)
+  
+  # Survival at t0 for each X* then average over X* 
+  S0_marg[m] <- mean( exp(- b0 * t0k[m]) )
+  S1_marg[m] <- mean( exp(- b1 * t0k[m]) )
+}
+
+SPCE_draws <- S1_marg - S0_marg 
+SPCE_mean  <- mean(SPCE_draws)
+SPCE_sd <-sd(SPCE_draws) #sd over M draws
+SPCE_CI    <- quantile(SPCE_draws, c(0.025, 0.975))
+bias <- SPCE_mean - true_spce_aft 
+
+SPCE_mean;SPCE_sd;SPCE_CI;bias
+#---------------------------resample X new with matrix ---------------------------------------
 #Extract posterior matrix
 post <- as.matrix(samp)  
 
@@ -106,6 +146,7 @@ w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))
 X_star <- sample(X, size = rx, replace = TRUE, prob = w)
 X_star_mat <- matrix(X_star, nrow = 1)
 L <- length(X_star) 
+
 
 # Compute the linear predictors
 mu0_mat <- eta0_mat %*% matrix(1, nrow = 1, ncol = L) + eta_x_mat %*% X_star_mat
