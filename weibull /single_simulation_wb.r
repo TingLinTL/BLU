@@ -3,7 +3,8 @@ library(LaplacesDemon)
 n <- 1000 #sample size 
 tau <- 5.5 #maximum follow-up time
 true_spce_aft <-  -0.2874432
-
+t0 <- 2 #predict time
+rx <- 10000 #number of resample of covariate X
 #covariate
 X <- rbinom(n, size = 1, prob = 0.4)
 
@@ -60,8 +61,7 @@ jags_data <- list(
     C = C_vec,
     is_cens = 1L - data_sim$d,     # 1=censored, 0=event
     A = data_sim$A,
-    X = data_sim$X,
-    t0 = 2.0      
+    X = data_sim$X
   )
 
 #c("beta0","beta1","beta2","k","S0","S1","SPCE")
@@ -74,12 +74,69 @@ jags_data <- list(
 
 #-------------------------------------------
 m <- jags.model("wbmodel.txt", data=jags_data, n.chains=1)
-params <- c("SPCE")
+params <-c("eta0","eta_x","eta_a","k")
 samp <- coda.samples(m, variable.names=params, n.iter=20000)
 samp = data.frame(samp[[1]][10001:20000, ])
 summary(samp)
-#-------------------------------------------
 
+
+
+
+#---------------------------resample X new---------------------------------------
+#Extract posterior matrix
+post <- as.matrix(samp)  
+
+# pull parameter vectors
+eta0  <- post[,"eta0"]
+eta_x <- post[,"eta_x"]
+eta_a <- post[,"eta_a"]
+k_draws  <- post[,"k"]         
+M<- nrow(post) 
+
+# Convert to matrices
+eta0_mat <- matrix(eta0, ncol = 1)
+eta_x_mat <- matrix(eta_x, ncol = 1)
+eta_a_mat <- matrix(eta_a, ncol = 1)
+k_draws_mat <- matrix(k_draws, ncol = 1)
+
+#Bayesian bootstrap over X
+
+w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))   
+#resample new X from reweighted X
+X_star <- sample(X, size = rx, replace = TRUE, prob = w)
+X_star_mat <- matrix(X_star, nrow = 1)
+L <- length(X_star) 
+
+# Compute the linear predictors
+mu0_mat <- eta0_mat %*% matrix(1, nrow = 1, ncol = L) + eta_x_mat %*% X_star_mat
+mu1_mat <- eta0_mat %*% matrix(1, nrow = 1, ncol = L) + eta_x_mat %*% X_star_mat + eta_a_mat %*% matrix(1, nrow = 1, ncol = L)  
+
+k_grid <- k_draws_mat %*% matrix(1, nrow = 1, ncol = L)
+# Convert to rates
+log_b0_mat <- -(k_grid * mu0_mat)
+log_b1_mat <- -(k_grid * mu1_mat)
+b0_mat <- exp(log_b0_mat)
+b1_mat <- exp(log_b1_mat)
+# Weibull survival with shape k and rate b S(t) = exp( - b * t^k )
+S0_mat <- exp(- b0_mat * (t0 ^ k_grid))
+S1_mat <- exp(- b1_mat * (t0 ^ k_grid))
+
+#over L for X
+S0_marg <- rowMeans(S0_mat)   # length M
+S1_marg <- rowMeans(S1_mat)   
+
+# --- Posterior summaries of marginal SPCE ---
+#Across all posterior draws m = 1,...,M
+SPCE_draws <- S1_marg - S0_marg   # length M
+SPCE_mean  <- mean(SPCE_draws)    # posterior mean
+SPCE_sd <-sd(SPCE_draws) #sd over M draws
+bias <- SPCE_mean - true_spce_aft ; bias
+SPCE_CI <- quantile(SPCE_draws, c(0.025, 0.975))  # 95% CI
+
+SPCE_mean;SPCE_sd;bias;SPCE_CI
+
+#easy trick
+#---------------------------BB no resample X---------------------------------------
 mat <- as.matrix(samp)  
 
 spce_cols <- grep("^SPCE(\\[|\\.)", colnames(mat), value = TRUE)
@@ -98,5 +155,4 @@ pos_mean <- mean(SPCE_marg);pos_mean #posterior mean of maginal SPCE
 sd(SPCE_marg) #sd over 10000 draws
 bias <- pos_mean - true_spce_aft ; bias
 quantile(SPCE_marg, c(.025, .975))
-
 
