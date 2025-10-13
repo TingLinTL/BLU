@@ -180,12 +180,7 @@ SPCE_mean;SPCE_sd;bias;SPCE_CI
 #---------------------------BB no resample X---------------------------------------
 mat <- as.matrix(samp)  
 
-spce_cols <- grep("^SPCE(\\[|\\.)", colnames(mat), value = TRUE)
-idx       <- as.integer(sub(".*?(\\d+).*", "\\1", spce_cols))  
-ord       <- order(idx)
-SPCE_mat  <- mat[ , spce_cols[ord], drop = FALSE]  
-dim(SPCE_mat )
-M <- nrow(SPCE_mat)
+####not complete, need to be updated later#####
 
 #Bayesian bootstrap over X
 w <- rdirichlet(M, rep(1, N))    
