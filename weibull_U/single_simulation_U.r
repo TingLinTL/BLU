@@ -6,6 +6,7 @@ n <- 1000 #sample size
 tau <- 5.5 #maximum follow-up time
 true_spce_aft <- -0.1464996
 t0 <- 2
+rx <- 100000
 
 #----------------generate data----------------
 #covariate
@@ -73,8 +74,8 @@ jags_data <- list(
 )
 
 #-------------------JAGS---------------------
-m <- jags.model("wbmodel_U_indep.txt", data=jags_data, n.chains=1)
-params <- c("eta0","eta_x","eta_a","eta_u","k","pU")
+m <- jags.model("wbmodel_U.txt", data=jags_data, n.chains=1)
+params <- c("eta0","eta_x","eta_a","eta_u","k","gamma0","gamma1")
 samp <- coda.samples(m, variable.names=params, n.iter=20000)
 samp = data.frame(samp[[1]][10001:20000, ])
 summary(samp)
@@ -85,111 +86,135 @@ summary(samp)
 #samp <- coda.samples(m, variable.names=params, n.iter=20000)
 #samp = data.frame(samp[[1]][10001:20000, ])
 #summary(samp)
-#-------------------------
-#Extract posterior matrix
-post <- as.matrix(samp)  
 
-# pull parameter vectors
-eta0  <- post[,"eta0"]
-eta_x <- post[,"eta_x"]
-eta_a <- post[,"eta_a"]
-eta_u  <- post[,"eta_u"]
-k_draws  <- post[,"k"]         
-#gamma0 <- post[,"gamma0"]
-#gamma1 <- post[,"gamma1"]
-pU <- post[,"pU"]
-Mdraws <- nrow(post) 
+#-------------- sample new X, X* first ---------------------
+compute_spce_bb_with_U <- function(
+    samp,        # posterior draws; must have: eta0, eta_x, eta_a, k, gamma0, gamma1
+    X,           # observed covariate vector
+    t0,          # time at which to evaluate survival
+    rx,          # size of BB resample X*
+    dirichlet_alpha = 1)  # BB prior mass
+  {
+  post   <- as.matrix(samp)
+  eta0    <- post[, "eta0"]
+  eta_x   <- post[, "eta_x"]
+  eta_a   <- post[, "eta_a"]
+  eta_u  <- post[,"eta_u"]
+  k_draws <- post[, "k"]
+  gamma0  <- post[, "gamma0"]
+  gamma1  <- post[, "gamma1"]
+  M <- nrow(post)
+  L <- length(X)
 
+  S0_marg  <- numeric(M)
+  S1_marg  <- numeric(M)
 
-#-----------------
-#sampling U from P(U|X) as Umat 
-spce_drawU_bb <- function(m, X, t0,
-                          eta0, eta_x, eta_a, eta_u, k_draws, pU,
-                          LU ) {
-  # m: index of posterior draw
-  N   <- length(X)
-  t0k <- t0^k_draws[m]
-  #pU  <- plogis(gamma0[m] + gamma1[m] * X)       
-  
-  # Monte Carlo over U|X: N x LU
-  Umat <- matrix(rbinom(N*LU, 1, rep(pU[m], each = LU)), nrow = N, ncol = LU)
-  Xmat <- matrix(X, nrow = N, ncol = LU)
-  
-  # Linear predictors (A=0,1)
-  mu0 <- eta0[m] + eta_x[m]*Xmat                 + eta_u[m]*Umat
-  mu1 <- eta0[m] + eta_x[m]*Xmat + eta_a[m]      + eta_u[m]*Umat
-  
-  b0 <- exp(-k_draws[m] * mu0);  b1 <- exp(-k_draws[m] * mu1)
-  S0 <- exp(-b0 * t0k);    S1 <- exp(-b1 * t0k)
-  
-  # Average over LU draws of U for each i
-  SPCE_bar <- rowMeans(S1) - rowMeans(S0)        # length N
-  
-  # One Bayesian-bootstrap draw over X
-  w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))
-  sum(w * SPCE_bar)                               # scalar psi for draw m
+  for (m in 1:M) {
+    #BB over X -> X*
+    w_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    X_star <- sample(X, size = rx, replace = TRUE, prob = w_m)
+    
+    #U* | X*
+    pU     <- plogis(gamma0[m] + gamma1[m] * X_star)
+    U_star <- rbinom(rx, size = 1, prob = pU)
+    
+    #AFT linear predictors
+    mu0 <- eta0[m] + eta_x[m] * X_star + eta_u[m] * U_star
+    mu1 <- mu0 + eta_a[m]
+    
+    #Weibull survival at t0 and average over X*
+    b0  <- exp(-k_draws[m] * mu0)
+    b1  <- exp(-k_draws[m] * mu1)
+    t0k <- t0 ^ k_draws[m]
+    
+    S0_marg[m] <- mean(exp(-b0 * t0k))
+    S1_marg[m] <- mean(exp(-b1 * t0k))
+  }
+  return(list(S0_marg = S0_marg, S1_marg = S1_marg))
 }
 
+surv_result <- compute_spce_bb_with_U(samp=samp, X=data_sim$X, t0=t0, rx=rx, 
+                                      dirichlet_alpha = 1) 
 
-#no sampling U, Using P(U|X) directly
-spce_drawU_bb2 <- function(m, X, t0,
-                           eta0, eta_x, eta_a, eta_u, k_draws, pU
-                            ){
-  
-  N   <- length(X)
-  t0k <- t0^k_draws[m]
-  #pU  <- plogis(gamma0[m] + gamma1[m]*X)
-  
-  mu0_u0 <- eta0[m] + eta_x[m]*X
-  mu0_u1 <- mu0_u0 + eta_u[m]
-  mu1_u0 <- eta0[m] + eta_x[m]*X + eta_a[m]
-  mu1_u1 <- mu1_u0 + eta_u[m]
-  
-  b0_u0 <- exp(-k_draws[m]*mu0_u0); b0_u1 <- exp(-k_draws[m]*mu0_u1)
-  b1_u0 <- exp(-k_draws[m]*mu1_u0); b1_u1 <- exp(-k_draws[m]*mu1_u1)
-  
-  S0_marg <- (1-pU[m])*exp(-b0_u0*t0k) + pU[m]*exp(-b0_u1*t0k)
-  S1_marg <- (1-pU[m])*exp(-b1_u0*t0k) + pU[m]*exp(-b1_u1*t0k)
-  SPCE_marg  <- S1_marg - S0_marg
-  
-  w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, length(X))))
-  sum(w *  SPCE_marg)
-  
-}
+SPCE_draws <- surv_result$S1_marg - surv_result$S0_marg 
+SPCE_mean  <- mean(SPCE_draws)
+SPCE_sd <-sd(SPCE_draws) #sd over M draws
+SPCE_CI    <- quantile(SPCE_draws, c(0.025, 0.975))
+bias <- SPCE_mean - true_spce_aft 
+
+SPCE_mean;SPCE_sd;SPCE_CI;bias
 #--------------------------------------
-
-#set.seed(2025)
-LU <- 500
-psi_list <- lapply(seq_len(Mdraws), function(m) {
-  spce_drawU_bb2(m, X, t0, eta0,eta_x,eta_a,eta_u,k_draws,pU
-                #, LU
-               )
-})
-psi_all <- unlist(psi_list)
-#psi_all
-# Summaries
-mean_SPCE <- mean(psi_all)
-sd_SPCE   <- sd(psi_all)
-ci_SPCE   <- quantile(psi_all, c(0.025, 0.975))
-bias <- mean_SPCE - true_spce_aft
-mean_SPCE; sd_SPCE; ci_SPCE; bias
 #true: -0.1464996
 
-#single run
-#bb1---------
-#mean_SPCE; sd_SPCE; ci_SPCE; bias
-# -0.1320271
-#0.03266953
-#2.5%       97.5% 
-#  -0.20128426 -0.07334746 
-#0.01447249
 
-#bb2--------
-#mean_SPCE; sd_SPCE; ci_SPCE; bias
-# -0.1320206
-# 0.0326568
-#2.5%       97.5% 
-#  -0.20119914 -0.07325163 
-# 0.01447905
-#
 
+#--------------draft-------------
+#sampling U from P(U|X) as Umat 
+# spce_drawU_bb <- function(m, X, t0,
+#                           eta0, eta_x, eta_a, eta_u, k_draws, pU,
+#                           LU ) {
+#   # m: index of posterior draw
+#   N   <- length(X)
+#   t0k <- t0^k_draws[m]
+#   #pU  <- plogis(gamma0[m] + gamma1[m] * X)       
+#   
+#   # Monte Carlo over U|X: N x LU
+#   Umat <- matrix(rbinom(N*LU, 1, rep(pU[m], each = LU)), nrow = N, ncol = LU)
+#   Xmat <- matrix(X, nrow = N, ncol = LU)
+#   
+#   # Linear predictors (A=0,1)
+#   mu0 <- eta0[m] + eta_x[m]*Xmat                 + eta_u[m]*Umat
+#   mu1 <- eta0[m] + eta_x[m]*Xmat + eta_a[m]      + eta_u[m]*Umat
+#   
+#   b0 <- exp(-k_draws[m] * mu0);  b1 <- exp(-k_draws[m] * mu1)
+#   S0 <- exp(-b0 * t0k);    S1 <- exp(-b1 * t0k)
+#   
+#   # Average over LU draws of U for each i
+#   SPCE_bar <- rowMeans(S1) - rowMeans(S0)        # length N
+#   
+#   # One Bayesian-bootstrap draw over X
+#   w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))
+#   sum(w * SPCE_bar)                               # scalar psi for draw m
+# }
+# 
+# 
+# #no sampling U, Using P(U|X) directly
+# spce_drawU_bb2 <- function(m, X, t0,
+#                            eta0, eta_x, eta_a, eta_u, k_draws, pU
+# ){
+#   
+#   N   <- length(X)
+#   t0k <- t0^k_draws[m]
+#   #pU  <- plogis(gamma0[m] + gamma1[m]*X)
+#   
+#   mu0_u0 <- eta0[m] + eta_x[m]*X
+#   mu0_u1 <- mu0_u0 + eta_u[m]
+#   mu1_u0 <- eta0[m] + eta_x[m]*X + eta_a[m]
+#   mu1_u1 <- mu1_u0 + eta_u[m]
+#   
+#   b0_u0 <- exp(-k_draws[m]*mu0_u0); b0_u1 <- exp(-k_draws[m]*mu0_u1)
+#   b1_u0 <- exp(-k_draws[m]*mu1_u0); b1_u1 <- exp(-k_draws[m]*mu1_u1)
+#   
+#   S0_marg <- (1-pU[m])*exp(-b0_u0*t0k) + pU[m]*exp(-b0_u1*t0k)
+#   S1_marg <- (1-pU[m])*exp(-b1_u0*t0k) + pU[m]*exp(-b1_u1*t0k)
+#   SPCE_marg  <- S1_marg - S0_marg
+#   
+#   w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, length(X))))
+#   sum(w *  SPCE_marg)
+#   
+# }
+
+#set.seed(2025)
+# LU <- 500
+# psi_list <- lapply(seq_len(Mdraws), function(m) {
+#   spce_drawU_bb2(m, X, t0, eta0,eta_x,eta_a,eta_u,k_draws,pU
+#                  #, LU
+#   )
+# })
+# psi_all <- unlist(psi_list)
+
+# mean_SPCE <- mean(psi_all)
+# sd_SPCE   <- sd(psi_all)
+# ci_SPCE   <- quantile(psi_all, c(0.025, 0.975))
+# bias <- mean_SPCE - true_spce_aft
+# mean_SPCE; sd_SPCE; ci_SPCE; bias
