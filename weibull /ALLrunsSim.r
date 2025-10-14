@@ -47,10 +47,14 @@ gen_data_sim <- function(n, tau, alpha_0, alpha_x,
   data_sim <- data.frame(M = M, d = d, A = A, X = X)
 }
 
+
+
+
+#----------------- Simulation -----------------------
 #Simulation runs s=1,2....,S
 t0 <- 2   #predict at specific t0
 true_spce <- -0.2874432 #true spce 
-S <- 200
+S <- 3
 
 pos_mean <- sd <- bias <- lo <- hi<- numeric(S)
 
@@ -86,7 +90,7 @@ for (s in 1:S) {
   #params <- c("SPCE")
   samp <- coda.samples(m, variable.names=params, n.iter=20000)
   samp = data.frame(samp[[1]][10001:20000, ])
-  
+
   #------------prepare matrix for next step BB---------
   
   mat <- as.matrix(samp)  
