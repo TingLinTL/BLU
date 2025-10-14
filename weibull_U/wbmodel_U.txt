@@ -37,7 +37,6 @@ model {
   #U parameters
   gamma0 ~ dnorm(0, 0.001)
   gamma1 ~ dnorm(0, 0.5)
-  #pU ~ dnorm(0, 0.1^(-2)) 
   
   #Treatment parameters
   alpha0 ~ dnorm(0, 0.001)
