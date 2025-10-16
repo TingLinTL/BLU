@@ -64,11 +64,6 @@ compute_spce_bb <- function(samp, X, t0, rx, true_spce_aft) {
   k_draws <- post[, "k"]  
   M<- nrow(post) 
   L <- length(X)
-
-  
-  # --- Bayesian bootstrap weights & resample X* ---
-  w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, L))) # Dirichlet(1,...,1)
-  X_star <- sample(X, size = rx, replace = TRUE, prob = w) # resample X*
   
   # --- precompute t0^k for all posterior draws ---
   t0k <- t0 ^ k_draws      
@@ -76,6 +71,10 @@ compute_spce_bb <- function(samp, X, t0, rx, true_spce_aft) {
   S1_marg<- numeric(M)
   
   for (m in 1:M) {
+    # --- Bayesian bootstrap weights & resample X* ---
+    w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, L))) # Dirichlet(1,...,1)
+    X_star <- sample(X, size = rx, replace = TRUE, prob = w) # resample X*
+    
     # linear predictors over the rx X* values
     mu0 <- eta0[m] + eta_x[m] * X_star
     mu1 <- eta0[m] + eta_a[m] + eta_x[m] * X_star
@@ -96,7 +95,7 @@ compute_spce_bb <- function(samp, X, t0, rx, true_spce_aft) {
     SPCE_mean  = mean(SPCE_draws),
     SPCE_sd    = sd(SPCE_draws),
     SPCE_CI    = quantile(SPCE_draws, c(0.025, 0.975)),
-    bias       = mean(SPCE_draws) - true_spce_aft
+    bias       = abs(mean(SPCE_draws - true_spce_aft))
   )
 }
 
