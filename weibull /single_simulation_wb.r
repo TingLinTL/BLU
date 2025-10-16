@@ -1,6 +1,6 @@
 library(survival)
 library(LaplacesDemon)
-n <- 100000 #sample size 
+n <- 1000 #sample size 
 tau <- 5.5 #maximum follow-up time
 true_spce_aft <-  -0.2984551 #-0.2874432(bernoulli X)
 t0 <- 2 #predict time
