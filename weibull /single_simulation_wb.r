@@ -74,7 +74,7 @@ jags_data <- list(
 
 #-------------------------------------------
 m <- jags.model("wbmodel.txt", data=jags_data, n.chains=1)
-params <-c("eta0","eta_x","eta_a","k")
+params <-c("eta0","eta_x","eta_a","pX","k")
 samp <- coda.samples(m, variable.names=params, n.iter=20000)
 samp = data.frame(samp[[1]][10001:20000, ])
 summary(samp)
@@ -90,10 +90,7 @@ eta_a <- post[,"eta_a"]
 k_draws  <- post[,"k"]         
 M<- nrow(post) 
 
-#Bayesian bootstrap over X
-w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))   
-#resample new X from reweighted X
-X_star <- sample(X, size = rx, replace = TRUE, prob = w)
+
 
 # --- precompute t0^k for all posterior draws ---
 t0k <- t0 ^ k_draws      
@@ -102,6 +99,11 @@ S1_marg<- numeric(M)
 
            
 for (m in 1:M) {
+  #Bayesian bootstrap over X
+  w <- as.numeric(LaplacesDemon::rdirichlet(1, rep(1, N)))   
+  #resample new X from reweighted X
+  X_star <- sample(X, size = rx, replace = TRUE, prob = w)
+  
   # linear predictors over the rx X* values
   mu0 <- eta0[m] + eta_x[m] * X_star
   mu1 <- eta0[m] + eta_a[m] + eta_x[m] * X_star
