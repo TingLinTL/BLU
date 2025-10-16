@@ -103,7 +103,7 @@ compute_spce_bb <- function(samp, X, t0, rx, true_spce_aft) {
 #----------------- Simulation -----------------------
 #Simulation runs s=1,2....,S
 t0 <- 2   #predict at specific t0
-true_spce <- -0.2874432 #true spce 
+true_spce <- -0.2984551#true for X~Normal(0,1) // #-0.2874432 #true for binary X with 0.4
 S <- 10
 rx <- 100000 #number of resample of covariate X
 
