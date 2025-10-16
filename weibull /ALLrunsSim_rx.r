@@ -13,8 +13,8 @@ gen_data_sim <- function(n, tau, alpha_0, alpha_x,
                          eta_intercept_a0, eta_intercept_a1, eta_x,
                          k, p_X) {
   # ---- Covariate ----
-  X <- rbinom(n, size = 1, prob = p_X) 
-  
+  #X <- rbinom(n, size = 1, prob = p_X) 
+  X <- rnorm(n, mean = 0, sd = 1)
   # ---- Treatment assignment ----
   linpred_A <- alpha_0 + alpha_x * X
   pi_A      <- plogis(linpred_A)
@@ -104,7 +104,7 @@ compute_spce_bb <- function(samp, X, t0, rx, true_spce_aft) {
 #Simulation runs s=1,2....,S
 t0 <- 2   #predict at specific t0
 true_spce <- -0.2874432 #true spce 
-S <- 200
+S <- 10
 rx <- 100000 #number of resample of covariate X
 
 pos_mean <- sd <- bias <- lo <- hi<- numeric(S)

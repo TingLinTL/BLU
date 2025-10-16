@@ -1,12 +1,13 @@
 library(survival)
 library(LaplacesDemon)
-n <- 1000 #sample size 
+n <- 100000 #sample size 
 tau <- 5.5 #maximum follow-up time
-true_spce_aft <-  -0.2874432
+true_spce_aft <-  -0.2984551 #-0.2874432(bernoulli X)
 t0 <- 2 #predict time
 rx <- 100000 #number of resample of covariate X
 #covariate
-X <- rbinom(n, size = 1, prob = 0.4)
+#X <- rbinom(n, size = 1, prob = 0.4)
+X <- rnorm(n, mean = 0, sd = 1)
 
 #treatment assignment
 alpha_0  <- 0.1; alpha_x <- 0.3
