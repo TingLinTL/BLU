@@ -121,7 +121,7 @@ SPCE_draws <- S1_marg - S0_marg
 SPCE_mean  <- mean(SPCE_draws)
 SPCE_sd <-sd(SPCE_draws) #sd over M draws
 SPCE_CI    <- quantile(SPCE_draws, c(0.025, 0.975))
-bias <- SPCE_mean - true_spce_aft 
+bias <- abs(SPCE_mean - true_spce_aft) 
 
 SPCE_mean;SPCE_sd;SPCE_CI;bias
 #---------------------------resample X new with matrix ---------------------------------------
@@ -173,7 +173,7 @@ S1_marg <- rowMeans(S1_mat)
 SPCE_draws <- S1_marg - S0_marg   # length M
 SPCE_mean  <- mean(SPCE_draws)    # posterior mean
 SPCE_sd <-sd(SPCE_draws) #sd over M draws
-bias <- SPCE_mean - true_spce_aft ; bias
+bias <- abs(mean(SPCE_draws - true_spce_aft)) ; bias
 SPCE_CI <- quantile(SPCE_draws, c(0.025, 0.975))  # 95% CI
 
 SPCE_mean;SPCE_sd;bias;SPCE_CI
