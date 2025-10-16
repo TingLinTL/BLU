@@ -4,7 +4,7 @@ n <- 1000 #sample size
 tau <- 5.5 #maximum follow-up time
 true_spce_aft <-  -0.2874432
 t0 <- 2 #predict time
-rx <- 1000000 #number of resample of covariate X
+rx <- 100000 #number of resample of covariate X
 #covariate
 X <- rbinom(n, size = 1, prob = 0.4)
 
