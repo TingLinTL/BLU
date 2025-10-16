@@ -21,3 +21,22 @@ true_spce
 
 
 #-0.2874432
+
+#single X ~ Normal(0,1)
+#NO U
+
+S_a <- function(x, eta_a) {
+  b <- exp(-k_true * (eta_a + eta_x * x))
+  exp(- b * t0^k_true)
+}
+
+S_diff <- function(x) {
+  (S_a(x, eta_a1) - S_a(x, eta_a0)) * dnorm(x, 0, 1)
+}
+
+true_spce_int <- integrate(S_diff, lower = -Inf, upper = Inf,
+                           rel.tol = 1e-8)$value
+true_spce_int
+#-0.2984551
+
+
