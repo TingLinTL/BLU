@@ -2,30 +2,30 @@ library(survival)
 library(rjags)
 library(LaplacesDemon)
 library(coda)
-n <- 1000 #sample size 
+n <- 1000#sample size 
 tau <- 5.5 #maximum follow-up time
-true_spce_aft <- -0.1464996
+true_spce_aft <- -0.1384194
 t0 <- 2
 rx <- 100000
 
 #----------------generate data----------------
 #covariate
-X <- rbinom(n, size = 1, prob = 0.4)
-
+X1 <- rbinom(n, size = 1, prob = 0.4)
+X2 <- rnorm(n, mean = 0, sd = 1)
 #unmeasured confounder
 U <- rbinom(n, size = 1, prob = 0.5)
 
 #treatment assignment
-alpha_0  <- 0.1; alpha_x <- 0.3; alpha_u <- -0.8
-linpred_A <- alpha_0 + alpha_x * X + alpha_u * U
+alpha_0  <- 0.1; alpha_x1 <- 0.3; alpha_x2 <- 0.7; alpha_u <- -0.8
+linpred_A <- alpha_0 + alpha_x1 * X1 + alpha_x2 * X2 + alpha_u * U
 pi_A      <- plogis(linpred_A)
 A         <- rbinom(n, size = 1, prob = pi_A)
 
 #time
-eta_intercept_a0 <- 0.7; eta_intercept_a1 <- 0.2; eta_x <- -0.1; eta_u  <- -0.8
+eta_intercept_a0 <- 0.7; eta_intercept_a1 <- 0.2; eta_x1 <- -0.1; eta_x2 <- 0.4; eta_u  <- -0.8
 k <- 2
-mu1 <- eta_intercept_a1 + eta_x * X + eta_u * U
-mu0 <- eta_intercept_a0 + eta_x * X + eta_u * U
+mu1 <- eta_intercept_a1 + eta_x1 * X1 + eta_x2 * X2 + eta_u * U
+mu0 <- eta_intercept_a0 + eta_x1 * X1 + eta_x2 * X2 + eta_u * U
 b1 <- exp(-k * mu1) 
 b0 <- exp(-k * mu0)   
 U0 <- runif(n)
@@ -50,32 +50,42 @@ data_sim <- data.frame(
   M = M,
   d = d,
   A = A,
-  X = X
+  X1 = X1,
+  X2 = X2
 )
 
+#mean(D_a1 > t0) - mean(D_a0 > t0)
 
 #---------- prepare for jags-----------------
 N <- nrow(data_sim)           #number of observations
-T_vec <- data_sim$M           # 'M' is the observed time 
-T_vec[data_sim$d == 0] <- NA_real_    # For subjects with d == 0 (censored), 
+# Observed time
+T_vec <- data_sim$M
+T_vec[data_sim$d == 0] <- NA_real_   # For subjects with d == 0 (censored), 
 # set event time to NA since the true event time is unknown.
-C_vec <- ifelse(data_sim$d == 1L, data_sim$M + 1, data_sim$M)
+eps <- 1e-6 
+C_vec <- ifelse(data_sim$d == 1L, data_sim$M + eps, data_sim$M)
+#C_vec <- ifelse(data_sim$d == 1L, data_sim$M + 1, data_sim$M)
 # If the event occurred (d == 1), define censoring time slightly *after* M 
 # ensures event time < censoring time in survival analysis in JAGS input.
 # If censored (d == 0), the censoring time equals the observed time M.
 
+
+# 1 = censored, 0 = event
+is_cens <- 1L - data_sim$d
+
 jags_data <- list(
-  N = N,
+  N = nrow(data_sim),
   T = T_vec,
   C = C_vec,
-  is_cens = 1L - data_sim$d,     # 1=censored, 0=event
+  is_cens = is_cens,
   A = data_sim$A,
-  X = data_sim$X
+  X1 = data_sim$X1,
+  X2 = data_sim$X2
 )
 
 #-------------------JAGS---------------------
 m <- jags.model("wbmodel_U.txt", data=jags_data, n.chains=1)
-params <- c("eta0","eta_x","eta_a","eta_u","k","gamma0","gamma1")
+params <- c("eta0","eta_x1","eta_x2","eta_a","eta_u","k","gamma0","gamma1","gamma2")
 samp <- coda.samples(m, variable.names=params, n.iter=20000)
 samp = data.frame(samp[[1]][10001:20000, ])
 summary(samp)
@@ -90,36 +100,41 @@ summary(samp)
 #-------------- sample new X, X* first ---------------------
 compute_spce_bb_with_U <- function(
     samp,        # posterior draws; must have: eta0, eta_x, eta_a, k, gamma0, gamma1
-    X,           # observed covariate vector
+    X1,  
+    X2,          # observed covariate vector
     t0,          # time at which to evaluate survival
     rx,          # size of BB resample X*
     dirichlet_alpha = 1)  # BB prior mass
   {
   post   <- as.matrix(samp)
   eta0    <- post[, "eta0"]
-  eta_x   <- post[, "eta_x"]
+  eta_x1   <- post[, "eta_x1"]
+  eta_x2   <- post[, "eta_x2"]
   eta_a   <- post[, "eta_a"]
   eta_u  <- post[,"eta_u"]
   k_draws <- post[, "k"]
   gamma0  <- post[, "gamma0"]
   gamma1  <- post[, "gamma1"]
+  gamma2  <- post[, "gamma2"]
   M <- nrow(post)
-  L <- length(X)
+  L <- length(X1)
 
   S0_marg  <- numeric(M)
   S1_marg  <- numeric(M)
 
   for (m in 1:M) {
     #BB over X -> X*
-    w_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
-    X_star <- sample(X, size = rx, replace = TRUE, prob = w_m)
+    w1_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    w2_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    X1_star <- sample(X1, size = rx, replace = TRUE, prob = w1_m)
+    X2_star <- sample(X2, size = rx, replace = TRUE, prob = w2_m)
     
     #U* | X*
-    pU     <- plogis(gamma0[m] + gamma1[m] * X_star)
+    pU     <- plogis(gamma0[m] + gamma1[m] * X1_star + gamma2[m] * X2_star)
     U_star <- rbinom(rx, size = 1, prob = pU)
     
     #AFT linear predictors
-    mu0 <- eta0[m] + eta_x[m] * X_star + eta_u[m] * U_star
+    mu0 <- eta0[m] + eta_x1[m] * X1_star + eta_x2[m] * X2_star + eta_u[m] * U_star
     mu1 <- mu0 + eta_a[m]
     
     #Weibull survival at t0 and average over X*
@@ -133,7 +148,7 @@ compute_spce_bb_with_U <- function(
   return(list(S0_marg = S0_marg, S1_marg = S1_marg))
 }
 
-surv_result <- compute_spce_bb_with_U(samp=samp, X=data_sim$X, t0=t0, rx=rx, 
+surv_result <- compute_spce_bb_with_U(samp=samp, X1=data_sim$X1, X2=data_sim$X2, t0=t0, rx=rx, 
                                       dirichlet_alpha = 1) 
 
 SPCE_draws <- surv_result$S1_marg - surv_result$S0_marg 
@@ -144,7 +159,7 @@ bias <- SPCE_mean - true_spce_aft
 
 SPCE_mean;SPCE_sd;SPCE_CI;bias
 #--------------------------------------
-#true: -0.1464996
+#true: -0.1384194
 
 
 
