@@ -124,10 +124,14 @@ compute_spce_bb_with_U <- function(
 
   for (m in 1:M) {
     #BB over X -> X*
-    w1_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
-    w2_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
-    X1_star <- sample(X1, size = rx, replace = TRUE, prob = w1_m)
-    X2_star <- sample(X2, size = rx, replace = TRUE, prob = w2_m)
+    w   <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    idx <- sample.int(L, size = rx, replace = TRUE, prob = w)  # sample rows
+    X1_star  <- X1[idx]
+    X2_star  <- X2[idx]
+    # w1_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    # w2_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    # X1_star <- sample(X1, size = rx, replace = TRUE, prob = w1_m)
+    # X2_star <- sample(X2, size = rx, replace = TRUE, prob = w2_m)
     
     #U* | X*
     pU     <- plogis(gamma0[m] + gamma1[m] * X1_star + gamma2[m] * X2_star)
