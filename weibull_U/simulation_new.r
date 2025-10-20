@@ -2,8 +2,7 @@ library(survival)
 library(rjags)
 library(LaplacesDemon)
 library(coda)
-n <- 1000 #sample size 
-tau <- 5.5 #maximum follow-up time
+
 
 #-------------- function to generate the data for each simulation run --------------
 gen_data_sim <- function(n, tau, alpha_0, alpha_x1, alpha_x2, alpha_u,
@@ -106,15 +105,64 @@ compute_spce_bb_with_U <- function(
   return(list(S0_marg = S0_marg, S1_marg = S1_marg))
 }
 
+#--------------- funtion to compute spce no U-------------
+compute_spce_bb_no_U <- function(
+    samp,        # posterior draws; must have: eta0, eta_x, eta_a, k, gamma0, gamma1
+    X1, 
+    X2,          # observed covariate vector
+    t0,          # time at which to evaluate survival
+    rx,          # size of BB resample X*
+    dirichlet_alpha = 1)  # BB prior mass
+{
+  post   <- as.matrix(samp)
+  eta0    <- post[, "eta0"]
+  eta_x1   <- post[, "eta_x1"]
+  eta_x2   <- post[, "eta_x2"]
+  eta_a   <- post[, "eta_a"]
+  k_draws <- post[, "k"]
+  M <- nrow(post)
+  L <- length(X1)
+  
+  S0_marg  <- numeric(M)
+  S1_marg  <- numeric(M)
+  
+  for (m in 1:M) {
+    #BB over X -> X*
+    w   <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    idx <- sample.int(L, size = rx, replace = TRUE, prob = w)  # sample rows
+    X1_star  <- X1[idx]
+    X2_star  <- X2[idx]
+    # w1_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    # w2_m    <- as.numeric(LaplacesDemon::rdirichlet(1, rep(dirichlet_alpha, L)))
+    # X1_star <- sample(X1, size = rx, replace = TRUE, prob = w1_m)
+    # X2_star <- sample(X2, size = rx, replace = TRUE, prob = w2_m)
+    
+    #AFT linear predictors
+    mu0 <- eta0[m] + eta_x1[m] * X1_star + eta_x2[m] * X2_star 
+    mu1 <- mu0 + eta_a[m]
+    
+    #Weibull survival at t0 and average over X*
+    b0  <- exp(-k_draws[m] * mu0)
+    b1  <- exp(-k_draws[m] * mu1)
+    t0k <- t0 ^ k_draws[m]
+    
+    S0_marg[m] <- mean(exp(-b0 * t0k))
+    S1_marg[m] <- mean(exp(-b1 * t0k))
+  }
+  return(list(S0_marg = S0_marg, S1_marg = S1_marg))
+}
+
 #----------------- Simulation -----------------------
 #Simulation runs s=1,2....,S
+n <- 1000 #sample size 
+tau <- 5.5 #maximum follow-up time
 t0 <- 2   #predict at specific t0
 true_spce_aft <- -0.1384194
-S <- 5 #number of simulation runs
-rx <- 100000 #number of resample of covariate X
+S <- 100 #number of simulation runs
+rx <- 5000 #number of resample of covariate X
 
-pos_mean <- sd <- bias <- lo <- hi<- numeric(S)
-
+pos_mean_withU <- sd_withU <- bias_withU <- lo_withU <- hi_withU <- numeric(S)
+pos_mean_noU <- sd_noU <- bias_noU <- lo_noU <- hi_noU <- numeric(S)
 
 for (s in 1:S) {
   #----------------generate data----------------
@@ -148,51 +196,87 @@ for (s in 1:S) {
   #-------------------JAGS---------------------
   #considering U
   model_withU <- jags.model("wbmodel_U.txt", data=jags_data, n.chains=1)
-  params <- c("eta0","eta_x1","eta_x2","eta_a","eta_u","k","gamma0","gamma1","gamma2")
-  samp <- coda.samples(model_withU, variable.names=params, n.iter=20000)
-  samp = data.frame(samp[[1]][10001:20000, ])
+  params_U <- c("eta0","eta_x1","eta_x2","eta_a","eta_u","k","gamma0","gamma1","gamma2")
+  samp_U <- coda.samples(model_withU, variable.names=params_U, n.iter=20000)
+  samp_U = data.frame(samp_U[[1]][10001:20000, ])
   
   #not considering U
-  #model_noU <- jags.model("wbmodel_noU.txt", data=jags_data, n.chains=1)
-  #params_noU <- c("eta0","eta_x","eta_a","eta_u","k")
-  #samp_noU <- coda.samples(m, variable.names=params, n.iter=20000)
-  #samp_noU = data.frame(samp[[1]][10001:20000, ])
-  #summary(samp_noU)
+  model_noU <- jags.model("wbmodel_noU.txt", data=jags_data, n.chains=1)
+  params_noU <- c("eta0","eta_x1","eta_x2","eta_a","k")
+  samp_noU <- coda.samples(model_noU, variable.names=params_noU, n.iter=20000)
+  samp_noU = data.frame(samp_noU[[1]][10001:20000, ])
+
   #------------compute spce by predefined function---------
   
-  surv_withU <- compute_spce_bb_with_U(samp=samp, X1=data_sim$X1, X2=data_sim$X2, t0=t0, rx=rx, 
+  surv_withU <- compute_spce_bb_with_U(samp=samp_U, X1=data_sim$X1, X2=data_sim$X2, t0=t0, rx=rx, 
                                         dirichlet_alpha = 1) 
+  surv_noU <- compute_spce_bb_no_U(samp=samp_noU, X1=data_sim$X1, X2=data_sim$X2, t0=t0, rx=rx, 
+                                       dirichlet_alpha = 1) 
   
-  SPCE_draws <- surv_withU$S1_marg-surv_withU$S0_marg
-  SPCE_mean  <- mean(surv_withU$S1_marg)-mean(surv_withU$S0_marg)
-  SPCE_CI    <- quantile(SPCE_draws, c(0.025, 0.975))
+  SPCE_draws_withU <- surv_withU$S1_marg-surv_withU$S0_marg
+  SPCE_mean_withU  <- mean(surv_withU$S1_marg)-mean(surv_withU$S0_marg)
+  SPCE_CI_withU    <- quantile(SPCE_draws_withU, c(0.025, 0.975))
+  
+  SPCE_draws_noU <- surv_noU$S1_marg-surv_noU$S0_marg
+  SPCE_mean_noU  <- mean(surv_noU$S1_marg)-mean(surv_noU$S0_marg)
+  SPCE_CI_noU    <- quantile(SPCE_draws_noU, c(0.025, 0.975))
   
   # --- Posterior summaries of marginal SPCE ---
-  pos_mean[s] <- SPCE_mean
-  sd[s] <- sd(SPCE_draws)
-  bias[s] <- SPCE_mean - true_spce_aft
-  lo[s] <- SPCE_CI[1]
-  hi[s] <- SPCE_CI[2] #95% equal-tail credible interval from draws 
+  pos_mean_withU[s] <- SPCE_mean_withU
+  sd_withU[s] <- sd(SPCE_draws_withU)
+  bias_withU[s] <- SPCE_mean_withU - true_spce_aft
+  lo_withU[s] <- SPCE_CI_withU[1]
+  hi_withU[s] <- SPCE_CI_withU[2] #95% equal-tail credible interval from draws 
   
+  pos_mean_noU[s] <- SPCE_mean_noU
+  sd_noU[s] <- sd(SPCE_draws_noU)
+  bias_noU[s] <- SPCE_mean_noU - true_spce_aft
+  lo_noU[s] <- SPCE_CI_noU[1]
+  hi_noU[s] <- SPCE_CI_noU[2] #95% equal-tail credible interval from draws 
 }
 
 
 
 #----summary---
-avg_pos_mean <- mean(pos_mean)#avergae posterior mean across S simulation runs
-ESE <- sd(pos_mean)#empirical standard error
-ASD <- mean(sd)#mean standard deviation across S simulation runs
-avg_bias <- mean(bias) #average of bias
-CP <- 100 * mean(true_spce_aft >= lo & true_spce_aft <= hi)
+#withU
+avg_pos_mean_withU <- mean(pos_mean_withU)#average posterior mean across S simulation runs
+ESE_withU <- sd(pos_mean_withU)#empirical standard error
+ASD_withU <- mean(sd_withU)#mean standard deviation across S simulation runs
+avg_bias_withU <- mean(bias_withU) #average of bias
+CP_withU <- 100 * mean(true_spce_aft >= lo_withU & true_spce_aft <= hi_withU)
+within_CI_withU <- ifelse(true_spce_aft >= lo_withU & true_spce_aft <= hi_withU, "Yes", "No")
 
-summary_df <- data.frame(
-  avg_pos_mean = avg_pos_mean,
-  ESE = ESE,
-  ASD = ASD,
-  avg_bias = avg_bias,
-  CP = CP
+#noU
+avg_pos_mean_noU <- mean(pos_mean_noU)#average posterior mean across S simulation runs
+ESE_noU <- sd(pos_mean_noU)#empirical standard error
+ASD_noU <- mean(sd_noU)#mean standard deviation across S simulation runs
+avg_bias_noU <- mean(bias_noU) #average of bias
+CP_noU <- 100 * mean(true_spce_aft >= lo_noU & true_spce_aft <= hi_noU)
+within_CI_noU <- ifelse(true_spce_aft >= lo_noU & true_spce_aft <= hi_noU, "Yes", "No")
+
+
+#withU summary
+summary_df_withU <- data.frame(
+  avg_pos_mean_withU = avg_pos_mean_withU, 
+  ESE_withU = ESE_withU,
+  ASD_withU = ASD_withU,
+  avg_bias_withU = avg_bias_withU,
+  CP_withU = CP_withU
 )
-print(summary_df)
+
+#noU summary
+summary_df_noU <- data.frame(
+  avg_pos_mean_noU = avg_pos_mean_noU, 
+  ESE_noU = ESE_noU,
+  ASD_noU = ASD_noU,
+  avg_bias_noU = avg_bias_noU,
+  CP_noU = CP_noU
+)
+
+print(summary_df_withU)
+print(summary_df_noU)
+#true -0.1384194
+
 
 
 # Collect results
@@ -202,7 +286,8 @@ results <- data.frame(
   sd = sd,
   bias = bias,
   lower_ci = lo,
-  upper_ci = hi
+  upper_ci = hi,
+  within_CI = within_CI
 )
 
-write.csv(results, "spce_results_U.csv", row.names = FALSE)
+write.csv(results, "spce_results_U_25_WeaklyInfo.csv", row.names = FALSE)
