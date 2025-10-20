@@ -29,24 +29,24 @@ model {
   
   # ----- Priors -----
   #outcome parameters
-  eta0 ~ dnorm(0, 0.001)
-  eta_x1 ~ dnorm(0, 0.001)
-  eta_x2 ~ dnorm(0, 0.001)
-  eta_a ~ dnorm(0, 0.001)
-  eta_u ~ dnorm(0, 0.001)      # sensitivity effect of U on outcome
+  eta0 ~ dnorm(0, 1)
+  eta_x1 ~ dnorm(0, 1)
+  eta_x2 ~ dnorm(0, 1)
+  eta_a ~ dnorm(0, 1)
+  eta_u ~ dnorm(0, 1)      # sensitivity effect of U on outcome
   
   #U parameters
-  gamma0 ~ dnorm(0, 0.01)
-  gamma1 ~ dnorm(0, 0.01)
-  gamma2 ~ dnorm(0, 0.01)
+  gamma0 ~ dnorm(0, 0.16)
+  gamma1 ~ dnorm(0, 0.16)
+  gamma2 ~ dnorm(0, 0.16)
   
   #Treatment parameters
-  alpha0 ~ dnorm(0, 0.001)
-  alpha1 ~ dnorm(0, 0.001)
-  alpha2 ~ dnorm(0, 0.001)
-  alpha3 ~ dnorm(0, 0.001)    # sensitivity effect of U on treatment
+  alpha0 ~ dnorm(0, 0.16)
+  alpha1 ~ dnorm(0, 0.16)
+  alpha2 ~ dnorm(0, 0.16)
+  alpha3 ~ dnorm(0, 0.44)    # sensitivity effect of U on treatment
   
-  logk ~ dnorm(0, 0.001)
+  logk ~ dnorm(log(2), 4)
   k <- exp(logk)
 
 }

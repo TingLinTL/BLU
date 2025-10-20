@@ -8,25 +8,25 @@ model {
     # Outcome model: Weibull distribution, dweib(shape = k, rate = b[i])
     T[i] ~ dweib(k, b[i])
     
-    # AFT linear predictor without U 
+    # AFT linear predictor without latent U 
     # mu[i] = eta0 + eta_x * X[i] + eta_a * A[i] 
     # log b[i] = -k * mu[i]
     # rate parameter b[i] = exp(-k * mu[i])
     
-    mu[i] <- eta0 + eta_x*X[i] + eta_a*A[i]
+    mu[i] <- eta0 + eta_x1*X1[i] + eta_x2*X2[i] + eta_a*A[i]
     log_b[i] <- -k * mu[i]
     b[i] <- exp(log_b[i])
-
+    
   }
   
   # ----- Priors -----
   #outcome parameters
-  eta0 ~ dnorm(0, 0.001)
-  eta_x ~ dnorm(0, 0.001)
-  eta_a ~ dnorm(0, 0.001)
-  eta_u ~ dnorm(0, 0.001)      # sensitivity effect of U on outcome
+  eta0 ~ dnorm(0, 1)
+  eta_x1 ~ dnorm(0, 1)
+  eta_x2 ~ dnorm(0, 1)
+  eta_a ~ dnorm(0, 1)
   
-  logk ~ dnorm(0, 0.001)
+  logk ~ dnorm(log(2), 4)
   k <- exp(logk)
   
 }
