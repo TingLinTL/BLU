@@ -281,13 +281,19 @@ print(summary_df_noU)
 
 # Collect results
 results <- data.frame(
-  sim = 1:length(pos_mean),
-  pos_mean = pos_mean,
-  sd = sd,
-  bias = bias,
-  lower_ci = lo,
-  upper_ci = hi,
-  within_CI = within_CI
+  sim_withU = 1:length(pos_mean_withU),
+  pos_mean_withU = pos_mean_withU,
+  sd_withU = sd_withU,
+  bias_withU = bias_withU,
+  lower_ci_withU = lo_withU, 
+  upper_ci_withU = hi_withU,
+  within_CI_withU = within_CI_withU,
+  pos_mean_noU = pos_mean_noU,
+  sd_noU = sd_noU,
+  bias_noU = bias_noU,
+  lower_ci_noU = lo_noU,
+  upper_ci_noU = hi_noU,
+  within_CI_noU = within_CI_noU
 )
 
-write.csv(results, "spce_results_U_25_WeaklyInfo.csv", row.names = FALSE)
+write.csv(results, "spce_results_both_100_WeaklyInfo.csv", row.names = FALSE)
