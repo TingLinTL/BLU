@@ -6,7 +6,7 @@ n <- 1000#sample size
 tau <- 5.5 #maximum follow-up time
 true_spce_aft <- -0.1384194
 t0 <- 2
-rx <- 100000
+rx <- 5000
 
 #----------------generate data----------------
 #covariate
