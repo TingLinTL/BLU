@@ -22,6 +22,8 @@ model {
     U[i] ~ dbern(pU[i])
     logit(pU[i]) <- gamma0 + gamma1*X1[i] + gamma2*X2[i] 
     
+
+    
     # ---- Treatment assignment model A|X,U ----
     A[i] ~ dbern(pA[i])
     logit(pA[i]) <- alpha0 + alpha1*X1[i] + alpha2*X2[i] + alpha3*U[i] 
@@ -36,9 +38,10 @@ model {
   eta_u ~ dnorm(0, 1)      # sensitivity effect of U on outcome
   
   #U parameters
-  gamma0 ~ dnorm(0, 0.16)
-  gamma1 ~ dnorm(0, 0.16)
-  gamma2 ~ dnorm(0, 0.16)
+  #gamma0 ~ dnorm(0, 0.16)
+  #gamma1 ~ dnorm(0, 0.16)
+  #gamma2 ~ dnorm(0, 0.16)
+  pU ~ dunif(0.1, 0.9)
   
   #Treatment parameters
   alpha0 ~ dnorm(0, 0.16)
