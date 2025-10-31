@@ -3,7 +3,7 @@ model {
     is_cens[i] ~ dinterval(T[i], C[i])
     T[i] ~ dweib(k, b[i])
     
-    mu[i] <- eta0 + eta_x*X[i] + eta_a*A[i] + eta_u*U[i]
+    mu[i] <- eta0 + eta_x1*X1[i] + eta_x2*X2[i] + eta_a*A[i] + eta_u*U[i]
     log_b[i] <- -k * mu[i]
     b[i] <- exp(log_b[i])
     
@@ -12,22 +12,26 @@ model {
     
     # ---- Treatment assignment model A|X,U ----
     A[i] ~ dbern(pA[i])
-    logit(pA[i]) <- alpha0 + alpha1*X[i] + alpha2*U[i]
+    logit(pA[i]) <- alpha0 + alpha1*X1[i] + alpha2*X2[i] + alpha3*U[i] 
   }
   
-  #Outcome parameters
-  eta0 ~ dnorm(0, 0.01)
-  eta_x ~ dnorm(0, 0.01)
-  eta_a ~ dnorm(0, 0.01)
-  eta_u ~ dnorm(0, 0.01)
+  # ----- Priors -----
+  #outcome parameters
+  eta0 ~ dnorm(0, 0.25)
+  eta_x1 ~ dnorm(0, 0.25)
+  eta_x2 ~ dnorm(0, 0.25)
+  eta_a ~ dnorm(0, 0.25)
+  eta_u ~ dnorm(0, 0.25)      # sensitivity effect of U on outcome
   
-  pU ~ dnorm(0, 0.5)   
+  #U parameters
+  pU ~ dunif(0.1, 0.9)
   
   #Treatment parameters
-  alpha0 ~ dnorm(0, 0.001)
-  alpha1 ~ dnorm(0, 0.001)
-  alpha2 ~ dnorm(0, 0.001)    # sensitivity effect of U on treatment
+  alpha0 ~ dnorm(0, 0.25)
+  alpha1 ~ dnorm(0, 0.25)
+  alpha2 ~ dnorm(0, 0.25)
+  alpha3 ~ dnorm(0, 0.25)    # sensitivity effect of U on treatment
   
-  logk ~ dnorm(0, 0.01)
+  logk ~ dnorm(log(2), 4)
   k <- exp(logk)
 }
