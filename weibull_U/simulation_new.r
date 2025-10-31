@@ -205,6 +205,12 @@ for (s in 1:S) {
   params_noU <- c("eta0","eta_x1","eta_x2","eta_a","k")
   samp_noU <- coda.samples(model_noU, variable.names=params_noU, n.iter=20000)
   samp_noU = data.frame(samp_noU[[1]][10001:20000, ])
+  
+  #considering U indep
+  model_withU <- jags.model("wbmodel_U_indep.txt", data=jags_data, n.chains=1)
+  params_U <- c("eta0","eta_x1","eta_x2","eta_a","eta_u","k","pU")
+  samp_U <- coda.samples(model_withU, variable.names=params_U, n.iter=20000)
+  samp_U = data.frame(samp_U[[1]][10001:20000, ])
 
   #------------compute spce by predefined function---------
   
@@ -235,7 +241,8 @@ for (s in 1:S) {
   hi_noU[s] <- SPCE_CI_noU[2] #95% equal-tail credible interval from draws 
 }
 
-
+pos_mean_withU;sd_withU;bias_withU;lo_withU;hi_withU
+pos_mean_noU;sd_noU;bias_noU;lo_noU;hi_noU
 
 #----summary---
 #withU
