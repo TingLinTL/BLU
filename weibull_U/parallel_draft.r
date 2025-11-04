@@ -410,7 +410,7 @@ run_one_rep <- function(r,
 }
 
 # -------- parallel across replicates r (no inner parallel) --------
-R <- 99
+R <- 200
 
 n.cores <- max(1, parallel::detectCores() - 1)
 cl <- parallel::makeCluster(n.cores, type = "PSOCK")
@@ -449,7 +449,7 @@ comb_long <- do.call(bind_rows, lapply(results, function(x) {
   )
 }))
 
-write.csv(comb_long, "results_long.csv", row.names = FALSE)
+write.table(comb_long, "results_long.txt", sep = " ", row.names = FALSE, quote = FALSE)
 
 #---------------------------------------------------------#
 # Compute coverage, bias, and summary stats all together. #
@@ -471,7 +471,9 @@ summary_comb <- comb_long %>%
   ) %>%
   arrange(method)
 
-summary_comb
+print(as.data.frame(summary_comb), digits = 7)
+
+
 
 #-------------#-------------#-------------#-------------#-------------#-------------#-------------#-------------
 
