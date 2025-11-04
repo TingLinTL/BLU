@@ -30,26 +30,27 @@ model {
   }
   
   # ----- Priors -----
+  #bias parameter: gamma0-Unif(-5,5) and rest - Unif(-2,2) 
+  #remaning parameters: intercept N(0, var=10), remaning N(0,var=4)
   #outcome parameters
-  eta0 ~ dnorm(0, 1)
-  eta_x1 ~ dnorm(0, 1)
-  eta_x2 ~ dnorm(0, 1)
-  eta_a ~ dnorm(0, 1)
-  eta_u ~ dnorm(0, 1)      # sensitivity effect of U on outcome
+    eta0 ~ dnorm(0, 0.1)
+    eta_x1 ~ dnorm(0, 0.25)
+    eta_x2 ~ dnorm(0, 0.25)
+    eta_a ~ dnorm(0, 0.25)
+    eta_u ~ dunif(-2, 2)      # sensitivity effect of U on outcome
   
-  #U parameters
-  #gamma0 ~ dnorm(0, 0.16)
-  #gamma1 ~ dnorm(0, 0.16)
-  #gamma2 ~ dnorm(0, 0.16)
-  pU ~ dunif(0.1, 0.9)
-  
-  #Treatment parameters
-  alpha0 ~ dnorm(0, 0.16)
-  alpha1 ~ dnorm(0, 0.16)
-  alpha2 ~ dnorm(0, 0.16)
-  alpha3 ~ dnorm(0, 0.44)    # sensitivity effect of U on treatment
-  
-  logk ~ dnorm(log(2), 4)
-  k <- exp(logk)
+    #U parameters
+    gamma0 ~ dunif(-5, 5)
+    gamma1 ~ dunif(-2, 2)
+    gamma2 ~ dunif(-2, 2)
 
+    #Treatment parameters
+    alpha0 ~ dnorm(0, 0.1)
+    alpha1 ~ dnorm(0, 0.25)
+    alpha2 ~ dnorm(0, 0.25)
+    alpha3 ~ dunif(-2, 2)   # sensitivity effect of U on treatment
+    
+    #logk ~ dnorm(log(2), 4) #increasing hazard
+    #k <- exp(logk)
+    k ~ dgamma(4, 2)
 }
