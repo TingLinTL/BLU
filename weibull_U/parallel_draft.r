@@ -113,7 +113,7 @@ compute_spce_bb_latU <- function(
 
 #compute spce for observed U approach
 compute_spce_bb_obsU <- function(
-    samp,        # posterior draws; must have: eta0, eta_x, eta_a, k, gamma0, gamma1
+    samp,        # posterior draws; must have: eta0, eta_x, eta_a, eta_u, k (no gamma*)
     X1, 
     X2,          # observed covariate vector
     U,           # including unobserved covariate vector
@@ -159,7 +159,7 @@ compute_spce_bb_obsU <- function(
 
 #compute spce for naive approach
 compute_spce_bb_naive <- function(
-    samp,        # posterior draws; must have: eta0, eta_x, eta_a, k, gamma0, gamma1
+    samp,        # posterior draws; must have: eta0, eta_x, eta_a, k (no eta_u and gamma*)
     X1, 
     X2,          # observed covariate vector
     t0,          # time at which to evaluate survival
