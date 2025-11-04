@@ -4,7 +4,11 @@ library(doRNG)            # reproducible foreach RNG streams
 library(rjags)
 library(MCMCprecision)
 
-## --- data generator function (AFT Weibull) ---
+
+#---------------------------------------#
+# Data generator function (AFT Weibull) #
+#---------------------------------------#
+
 gen_data_sim <- function(n, tau, alpha_0, alpha_x1, alpha_x2, alpha_u,
                         eta_intercept_a0, eta_intercept_a1, eta_x1, eta_x2, eta_u,
                         k, pU) {
@@ -52,7 +56,10 @@ gen_data_sim <- function(n, tau, alpha_0, alpha_x1, alpha_x2, alpha_u,
   list(data_sim_noU = data_sim_noU, data_sim_withU = data_sim_withU)
 }
 
-#--------------- funtion to compute spce with U-------------
+
+#-------------------------------------------------------------#
+# function to compute spce for all three approaches.          #
+#-------------------------------------------------------------#
 #compute spce for latU approach
 compute_spce_bb_latU <- function(
     samp,        # posterior draws; must have: eta0, eta_x, eta_a, k, gamma0, gamma1
@@ -192,14 +199,20 @@ compute_spce_bb_naive <- function(
   }
   return(list(S0_marg = S0_marg, S1_marg = S1_marg))
 }
-## --- single-replicate runner ---
+
+#----------------------------------------#
+#     single-replicate runner            #
+#----------------------------------------#
+
 run_one_rep <- function(r,
                         nburn = 3000, M = 5000,
                         N = 1000,  B = 10000, t0 = 2) {
   
   set.seed(1000 + r)  
   
-  # --- JAGS model  ---
+  #------------------------------------------------------#
+  #     JAGS models for all three approaches.            #
+  #------------------------------------------------------#
   # #bias parameter: gamma0-Unif(-5,5) and rest - Unif(-2,2) 
   #remaning parameters: intercept N(0, 5^2), remaning N(0,2^2)
   jags_model <- "
@@ -397,7 +410,7 @@ run_one_rep <- function(r,
 }
 
 # -------- parallel across replicates r (no inner parallel) --------
-R <- 9
+R <- 99
 
 n.cores <- max(1, parallel::detectCores() - 1)
 cl <- parallel::makeCluster(n.cores, type = "PSOCK")
@@ -407,15 +420,19 @@ set.seed(123)  # master seed for %dorng%
 
 results <- foreach(r = 1:R,
                    .packages = c("rjags", "MCMCprecision"),
-                   .export   = c("gen_data_sim", "compute_spce_bb_latU", "compute_spce_bb_obsU","run_one_rep")) %dorng% {
-                     run_one_rep(r)
-                   }
+                   .export   = c("gen_data_sim",
+                                 "compute_spce_bb_latU",
+                                 "compute_spce_bb_obsU",
+                                 "compute_spce_bb_naive", 
+                                 "run_one_rep")) %dorng% { run_one_rep(r) }
 
 parallel::stopCluster(cl)
 
 t1 <- Sys.time()
 runtime_min <- as.numeric(difftime(t1, t0, units = "mins"))
 runtime_min
+
+
 # combine to a data.frame with columns: spce_mean, spce_ci_lo, spce_ci_hi
 library(dplyr)
 library(tidyr)
@@ -434,31 +451,28 @@ comb_long <- do.call(bind_rows, lapply(results, function(x) {
 
 write.csv(comb_long, "results_long.csv", row.names = FALSE)
 
-#-------------#-------------#-------------#-------------#-------------#-------------#-------------
-
-# Compute coverage, bias, and summary stats all together
+#---------------------------------------------------------#
+# Compute coverage, bias, and summary stats all together. #
+#---------------------------------------------------------#
 summary_comb <- comb_long %>%
   mutate(
     method = factor(method, levels = c("naive", "latU", "obsU")), 
     bias   = mean - true_spce_aft,
-    cover  = (true_spce_aft >= ci_lo & true_spce_aft <= ci_hi),
-    width  = ci_hi - ci_lo,
-    z_abs  = abs(bias / sd)
+    cover  = (true_spce_aft >= ci_lo & true_spce_aft <= ci_hi)
   ) %>%
   group_by(method) %>%
   summarise(
-    coverage   = mean(cover),
-    mean_est   = mean(mean),
-    mean_bias  = mean(bias),
-    mean_sd    = mean(sd),
-    mc_sd      = sd(mean),
-    mean_width = mean(width),
-    mean_abs_z = mean(z_abs),
+    coverage  = mean(cover),
+    mean_est  = mean(mean),
+    mean_bias = mean(bias),
+    mean_sd   = mean(sd),
+    mc_sd     = sd(mean),
     .groups = "drop"
   ) %>%
   arrange(method)
 
 summary_comb
+
 #-------------#-------------#-------------#-------------#-------------#-------------#-------------#-------------
 
 #draft
